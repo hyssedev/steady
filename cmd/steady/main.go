@@ -9,27 +9,31 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/hyssedev/steady/internal/config"
 )
 
 type App struct {
 	HttpServer *http.Server
 }
 
-func NewApp() (App, error) {
+func NewApp(cfg *config.Config) App {
 	server := &http.Server{
-		Addr: ":8080",
+		Addr: cfg.Listen,
 	}
 
 	return App{
 		HttpServer: server,
-	}, nil
+	}
 }
 
 func Run() error {
-	app, err := NewApp()
+	cfg, err := config.ReadConfig("config.yaml")
 	if err != nil {
-		panic("error setting up app")
+		return err
 	}
+
+	app := NewApp(&cfg)
 
 	go func() {
 		log.Printf("listening on %s\n", app.HttpServer.Addr)
@@ -39,20 +43,26 @@ func Run() error {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	<-quit
+	<-ctx.Done()
 	log.Print("shutting down server ...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := app.HttpServer.Shutdown(ctx); err != nil {
-		return fmt.Errorf("error when shutting down server: %v", err)
+	if err := app.HttpServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shut down server: %w", err)
 	}
 
 	log.Print("server shut down")
 
 	return nil
+}
+
+func main() {
+	if err := Run(); err != nil {
+		log.Fatal(err)
+	}
 }
