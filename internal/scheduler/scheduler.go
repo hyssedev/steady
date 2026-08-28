@@ -7,22 +7,25 @@ import (
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/monitor"
 )
 
 type Scheduler struct {
-	ctx context.Context
-	cfg config.Config
+	ctx        context.Context
+	cfg        config.Config
+	workerChan chan *monitor.Monitor
 }
 
-func NewScheduler(ctx context.Context, cfg config.Config) Scheduler {
+func NewScheduler(ctx context.Context, cfg config.Config, workerChan chan *monitor.Monitor) Scheduler {
 	return Scheduler{
-		ctx: ctx,
-		cfg: cfg,
+		ctx:        ctx,
+		cfg:        cfg,
+		workerChan: workerChan,
 	}
 }
 
 type scheduledMonitor struct {
-	*config.Monitor
+	monitor   *monitor.Monitor
 	nextCheck time.Time
 	lastCheck time.Time
 	index     int
@@ -33,7 +36,7 @@ func (s Scheduler) Run() {
 
 	for i, m := range s.cfg.Monitors {
 		mh[i] = &scheduledMonitor{
-			Monitor:   &m,
+			monitor:   &m,
 			nextCheck: time.Now().Add(s.cfg.Interval),
 			index:     i,
 		}
@@ -42,19 +45,22 @@ func (s Scheduler) Run() {
 	heap.Init(&mh)
 
 	for {
-		monitor := heap.Pop(&mh).(*scheduledMonitor)
+		scheduled := heap.Pop(&mh).(*scheduledMonitor)
 
-		wait := time.Until(monitor.nextCheck)
+		wait := time.Until(scheduled.nextCheck)
+
 		fmt.Printf("wait %v\n", wait)
 
 		timer := time.NewTimer(wait)
 
 		select {
 		case <-timer.C:
-			monitor.nextCheck = time.Now().Add(s.cfg.Interval)
-			monitor.lastCheck = time.Now()
+			s.workerChan <- scheduled.monitor
 
-			heap.Push(&mh, monitor)
+			scheduled.nextCheck = time.Now().Add(s.cfg.Interval)
+			scheduled.lastCheck = time.Now()
+
+			heap.Push(&mh, scheduled)
 		case <-s.ctx.Done():
 			// TODO: clean-up
 			return

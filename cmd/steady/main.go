@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/monitor"
 	"github.com/hyssedev/steady/internal/scheduler"
 )
 
@@ -47,7 +48,9 @@ func Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	scheduler := scheduler.NewScheduler(ctx, cfg)
+	workerChan := make(chan *monitor.Monitor, 1)
+
+	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
 	go scheduler.Run()
 
 	<-ctx.Done()

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/hyssedev/steady/internal/monitor"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -14,7 +15,7 @@ type rawConfig struct {
 	Interval string `yaml:"interval"`
 	Timeout  string `yaml:"timeout"`
 
-	Monitors []Monitor `yaml:"monitors"`
+	Monitors []monitor.Monitor `yaml:"monitors"`
 }
 
 type Config struct {
@@ -22,12 +23,7 @@ type Config struct {
 	Interval time.Duration
 	Timeout  time.Duration
 
-	Monitors []Monitor
-}
-
-type Monitor struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
+	Monitors []monitor.Monitor
 }
 
 func ReadConfig(path string) (Config, error) {
