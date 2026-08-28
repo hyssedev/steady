@@ -2,64 +2,39 @@ package scheduler
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
 )
 
-type Scheduler struct{}
+type Scheduler struct {
+	ctx context.Context
+	cfg config.Config
+}
 
-type Monitor struct {
-	config.Monitor
+func NewScheduler(ctx context.Context, cfg config.Config) Scheduler {
+	return Scheduler{
+		ctx: ctx,
+		cfg: cfg,
+	}
+}
+
+type scheduledMonitor struct {
+	*config.Monitor
 	nextCheck time.Time
+	lastCheck time.Time
 	index     int
 }
 
-type MonitorHeap []*Monitor
+func (s Scheduler) Run() {
+	mh := make(MonitorHeap, len(s.cfg.Monitors))
 
-func (mh MonitorHeap) Len() int {
-	return len(mh)
-}
-
-func (mh MonitorHeap) Less(i, j int) bool {
-	return mh[i].nextCheck.Before(mh[j].nextCheck)
-}
-
-func (mh MonitorHeap) Swap(i, j int) {
-	mh[i], mh[j] = mh[j], mh[i]
-	mh[i].index = i
-	mh[j].index = j
-}
-
-func (mh *MonitorHeap) Push(x any) {
-	n := len(*mh)
-	monitor := x.(*Monitor)
-	monitor.index = n
-	*mh = append(*mh, monitor)
-}
-
-func (mh *MonitorHeap) Pop() any {
-	old := *mh
-	n := len(old)
-	monitor := old[n-1]
-	monitor.index = -1 // for safety
-	*mh = old[0 : n-1]
-	return monitor
-}
-
-func (mh *MonitorHeap) update(monitor *Monitor, nextCheck time.Time) {
-	monitor.nextCheck = nextCheck
-	heap.Fix(mh, monitor.index)
-}
-
-func Test(cfg config.Config) {
-	mh := make(MonitorHeap, len(cfg.Monitors))
-
-	for i, m := range cfg.Monitors {
-		mh[i] = &Monitor{
-			Monitor:   m,
-			nextCheck: time.Now().Add(cfg.Interval),
+	for i, m := range s.cfg.Monitors {
+		mh[i] = &scheduledMonitor{
+			Monitor:   &m,
+			nextCheck: time.Now().Add(s.cfg.Interval),
 			index:     i,
 		}
 	}
@@ -67,7 +42,7 @@ func Test(cfg config.Config) {
 	heap.Init(&mh)
 
 	for {
-		monitor := heap.Pop(&mh).(*Monitor)
+		monitor := heap.Pop(&mh).(*scheduledMonitor)
 
 		wait := time.Until(monitor.nextCheck)
 		fmt.Printf("wait %v\n", wait)
@@ -76,9 +51,13 @@ func Test(cfg config.Config) {
 
 		select {
 		case <-timer.C:
-			// fmt.Printf("%v\n", monitor.nextCheck)
-			monitor.nextCheck = time.Now().Add(cfg.Interval)
+			monitor.nextCheck = time.Now().Add(s.cfg.Interval)
+			monitor.lastCheck = time.Now()
+
 			heap.Push(&mh, monitor)
+		case <-s.ctx.Done():
+			// TODO: clean-up
+			return
 		}
 	}
 }

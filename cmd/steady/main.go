@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/scheduler"
 )
 
 type App struct {
 	HttpServer *http.Server
 }
 
-func NewApp(cfg *config.Config) App {
+func NewApp(cfg config.Config) App {
 	server := &http.Server{
 		Addr: cfg.Listen,
 	}
@@ -33,7 +34,7 @@ func Run() error {
 		return err
 	}
 
-	app := NewApp(&cfg)
+	app := NewApp(cfg)
 
 	go func() {
 		log.Printf("listening on %s\n", app.HttpServer.Addr)
@@ -45,6 +46,9 @@ func Run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	scheduler := scheduler.NewScheduler(ctx, cfg)
+	go scheduler.Run()
 
 	<-ctx.Done()
 	log.Print("shutting down server ...")
