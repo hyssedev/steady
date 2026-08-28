@@ -28,17 +28,15 @@ type scheduledMonitor struct {
 	monitor   *monitor.Monitor
 	nextCheck time.Time
 	lastCheck time.Time
-	index     int
 }
 
 func (s Scheduler) Run() {
 	mh := make(MonitorHeap, len(s.cfg.Monitors))
 
-	for i, m := range s.cfg.Monitors {
+	for i := range s.cfg.Monitors {
 		mh[i] = &scheduledMonitor{
-			monitor:   &m,
+			monitor:   &s.cfg.Monitors[i],
 			nextCheck: time.Now().Add(s.cfg.Interval),
-			index:     i,
 		}
 	}
 
@@ -63,6 +61,8 @@ func (s Scheduler) Run() {
 			heap.Push(&mh, scheduled)
 		case <-s.ctx.Done():
 			// TODO: clean-up
+			timer.Stop()
+
 			return
 		}
 	}
