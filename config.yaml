@@ -1,0 +1,11 @@
+listen: ":8080"
+interval: 1m
+timeout: 5s
+
+monitors:
+  - name: Main
+    url: https://example.com
+  - name: Docker
+    url: https://docker.example.com
+  - name: Down
+    url: https://down.example.com
