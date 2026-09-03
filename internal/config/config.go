@@ -10,12 +10,17 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+type rawMonitor struct {
+	Name   string `yaml:"name"`
+	RawURL string `yaml:"url"`
+}
+
 type rawConfig struct {
 	Listen   string `yaml:"listen"`
 	Interval string `yaml:"interval"`
 	Timeout  string `yaml:"timeout"`
 
-	Monitors []monitor.Monitor `yaml:"monitors"`
+	Monitors []rawMonitor `yaml:"monitors"`
 }
 
 type Config struct {
@@ -68,16 +73,37 @@ func parse(data []byte) (Config, error) {
 		return Config{}, fmt.Errorf("no monitors present")
 	}
 
-	for _, m := range raw.Monitors {
-		if _, err := url.ParseRequestURI(m.URL); err != nil {
-			return Config{}, fmt.Errorf("monitor %s has invalid URL: %w", m.Name, err)
-		}
+	monitors, err := validateUrls(raw)
+	if err != nil {
+		return Config{}, err
 	}
 
 	return Config{
 		Listen:   raw.Listen,
 		Interval: interval,
 		Timeout:  timeout,
-		Monitors: raw.Monitors,
+		Monitors: monitors,
 	}, nil
+}
+
+func validateUrls(raw rawConfig) ([]monitor.Monitor, error) {
+	monitors := make([]monitor.Monitor, len(raw.Monitors))
+
+	for i, rawMonitor := range raw.Monitors {
+		u, err := url.ParseRequestURI(rawMonitor.RawURL)
+		if err != nil {
+			return nil, fmt.Errorf("monitor %s has invalid URL: %w", rawMonitor.Name, err)
+		}
+
+		if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return nil, fmt.Errorf("monitor %q must use a valid http or https URL", rawMonitor.Name)
+		}
+
+		monitors[i] = monitor.Monitor{
+			Name: rawMonitor.Name,
+			URL:  u,
+		}
+	}
+
+	return monitors, nil
 }
