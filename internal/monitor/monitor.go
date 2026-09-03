@@ -1,6 +1,8 @@
 package monitor
 
+import "net/url"
+
 type Monitor struct {
-	Name string `yaml:"name"`
-	URL  string `yaml:"url"`
+	Name string
+	URL  *url.URL
 }
