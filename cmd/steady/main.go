@@ -13,6 +13,7 @@ import (
 	"github.com/hyssedev/steady/internal/config"
 	"github.com/hyssedev/steady/internal/monitor"
 	"github.com/hyssedev/steady/internal/scheduler"
+	"github.com/hyssedev/steady/internal/worker"
 )
 
 type App struct {
@@ -52,6 +53,9 @@ func Run() error {
 
 	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
 	go scheduler.Run()
+
+	workerPool := worker.NewWorkerPool(ctx, cfg, workerChan)
+	go workerPool.Work()
 
 	<-ctx.Done()
 	log.Print("shutting down server ...")
