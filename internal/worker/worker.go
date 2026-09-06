@@ -29,7 +29,7 @@ func NewWorkerPool(ctx context.Context, cfg config.Config, channel chan *monitor
 	}
 }
 
-func (wp *WorkerPool) Work() {
+func (wp WorkerPool) Work() {
 	for i := 1; i <= 3; i++ {
 		worker := NewWorker(wp.ctx, i, wp.client, wp.channel)
 		wp.workers = append(wp.workers, worker)
@@ -75,6 +75,7 @@ func (w Worker) work() {
 
 			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
 				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
+				continue
 			}
 
 			fmt.Printf("Check %v successful\n", job.Name)
