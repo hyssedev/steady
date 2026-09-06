@@ -66,12 +66,16 @@ func (w Worker) work() {
 
 			resp, err := w.client.Do(req)
 			if err != nil {
-				fmt.Printf("Check %v failed\n", job.Name)
+				fmt.Printf("Check %v failed, err: %v\n", job.Name, err)
 				continue
 			}
 
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
+
+			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
+				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
+			}
 
 			fmt.Printf("Check %v successful\n", job.Name)
 
