@@ -73,7 +73,7 @@ func parse(data []byte) (Config, error) {
 		return Config{}, fmt.Errorf("no monitors present")
 	}
 
-	monitors, err := validateUrls(raw)
+	monitors, err := validateURLs(raw)
 	if err != nil {
 		return Config{}, err
 	}
@@ -86,7 +86,7 @@ func parse(data []byte) (Config, error) {
 	}, nil
 }
 
-func validateUrls(raw rawConfig) ([]monitor.Monitor, error) {
+func validateURLs(raw rawConfig) ([]monitor.Monitor, error) {
 	monitors := make([]monitor.Monitor, len(raw.Monitors))
 
 	for i, rawMonitor := range raw.Monitors {

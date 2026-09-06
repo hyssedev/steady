@@ -20,6 +20,7 @@ func NewDatabase(ctx context.Context) (Database, error) {
 	}
 
 	if err := createTables(ctx, db); err != nil {
+		db.Close()
 		return Database{}, err
 	}
 
@@ -56,7 +57,7 @@ func (db Database) SyncMonitors(ctx context.Context, monitors []monitor.Monitor)
 	return monitors, nil
 }
 
-func (db Database) SaveCheck(ctx context.Context, monitorID int64, success bool, statusCode *int, latency time.Duration, checkErr error) error {
+func (db Database) SaveCheck(ctx context.Context, monitorID int64, success bool, statusCode *int, latency_ms int64, checkErr error) error {
 	successInt := 0
 	if success {
 		successInt = 1
@@ -67,7 +68,7 @@ func (db Database) SaveCheck(ctx context.Context, monitorID int64, success bool,
 		checkError = checkErr.Error()
 	}
 
-	if _, err := db.DB.ExecContext(ctx, insertCheckQuery, monitorID, successInt, statusCode, latency, checkError, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := db.DB.ExecContext(ctx, insertCheckQuery, monitorID, successInt, statusCode, latency_ms, checkError, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 

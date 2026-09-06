@@ -1,6 +1,6 @@
 package database
 
-var createTablesQuery = `
+const createTablesQuery = `
 		CREATE TABLE IF NOT EXISTS monitors (
 			id         INTEGER PRIMARY KEY,
 			name       TEXT NOT NULL,
@@ -21,17 +21,17 @@ var createTablesQuery = `
 		CREATE INDEX IF NOT EXISTS checks_monitor_checked_at
 		ON checks (monitor_id, checked_at);`
 
-var insertMonitorQuery = `
+const insertMonitorQuery = `
 		INSERT INTO monitors (name, url, created_at)
 		VALUES (?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET name = excluded.name;`
 
-var getIdQuery = `
+const getIdQuery = `
 		SELECT id
 		FROM monitors
 		WHERE url = ?;`
 
-var insertCheckQuery = `
+const insertCheckQuery = `
 		INSERT INTO checks (
 			monitor_id,
 			success,

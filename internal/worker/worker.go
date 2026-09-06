@@ -7,36 +7,32 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hyssedev/steady/internal/config"
 	"github.com/hyssedev/steady/internal/database"
 	"github.com/hyssedev/steady/internal/monitor"
 )
 
 type WorkerPool struct {
 	ctx     context.Context
-	cfg     config.Config
-	channel chan *monitor.Monitor
+	timeout time.Duration
+	channel chan monitor.Monitor
 	db      database.Database
 
-	client  *http.Client
-	workers []Worker
+	client *http.Client
 }
 
-func NewWorkerPool(ctx context.Context, cfg config.Config, channel chan *monitor.Monitor, db database.Database) WorkerPool {
+func NewWorkerPool(ctx context.Context, timeout time.Duration, channel chan monitor.Monitor, db database.Database) WorkerPool {
 	return WorkerPool{
 		ctx:     ctx,
-		cfg:     cfg,
 		channel: channel,
 		db:      db,
 
-		client: newClient(cfg),
+		client: newClient(timeout),
 	}
 }
 
 func (wp WorkerPool) Work() {
 	for i := 1; i <= 3; i++ {
 		worker := NewWorker(wp.ctx, i, wp.client, wp.channel, wp.db)
-		wp.workers = append(wp.workers, worker)
 
 		go worker.work()
 	}
@@ -46,12 +42,12 @@ type Worker struct {
 	ctx     context.Context
 	id      int
 	client  *http.Client
-	channel chan *monitor.Monitor
+	channel chan monitor.Monitor
 
 	db database.Database
 }
 
-func NewWorker(ctx context.Context, id int, client *http.Client, channel chan *monitor.Monitor, db database.Database) Worker {
+func NewWorker(ctx context.Context, id int, client *http.Client, channel chan monitor.Monitor, db database.Database) Worker {
 	return Worker{
 		ctx:     ctx,
 		id:      id,
@@ -79,7 +75,7 @@ func (w Worker) work() {
 			if err != nil {
 				fmt.Printf("Check %v failed, err: %v\n", job.Name, err)
 
-				if err := w.db.SaveCheck(w.ctx, job.ID, false, nil, latency, err); err != nil {
+				if err := w.db.SaveCheck(w.ctx, job.ID, false, nil, latency.Milliseconds(), err); err != nil {
 					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 				}
 				continue
@@ -91,14 +87,14 @@ func (w Worker) work() {
 			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
 				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
 
-				if err := w.db.SaveCheck(w.ctx, job.ID, false, &resp.StatusCode, latency, err); err != nil {
+				if err := w.db.SaveCheck(w.ctx, job.ID, false, &resp.StatusCode, latency.Milliseconds(), err); err != nil {
 					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 				}
 				continue
 			}
 
 			fmt.Printf("Check %v successful\n", job.Name)
-			if err := w.db.SaveCheck(w.ctx, job.ID, true, &resp.StatusCode, latency, err); err != nil {
+			if err := w.db.SaveCheck(w.ctx, job.ID, true, &resp.StatusCode, latency.Milliseconds(), err); err != nil {
 				fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 			}
 		case <-w.ctx.Done():
@@ -108,13 +104,13 @@ func (w Worker) work() {
 	}
 }
 
-func newClient(cfg config.Config) *http.Client {
+func newClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		// Transport: nil,
 		// CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		// 	panic("TODO")
 		// },
 		// Jar:     nil,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 }

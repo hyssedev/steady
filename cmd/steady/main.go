@@ -50,23 +50,23 @@ func Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	workerChan := make(chan *monitor.Monitor, 1)
+	workerChan := make(chan monitor.Monitor, 1)
 
-	database, err := database.NewDatabase(ctx)
+	db, err := database.NewDatabase(ctx)
 	if err != nil {
 		return err
 	}
-	defer database.DB.Close()
+	defer db.DB.Close()
 
-	cfg.Monitors, err = database.SyncMonitors(ctx, cfg.Monitors)
+	monitors, err := db.SyncMonitors(ctx, cfg.Monitors)
 	if err != nil {
 		return err
 	}
 
-	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
+	scheduler := scheduler.NewScheduler(ctx, cfg.Interval, monitors, workerChan)
 	go scheduler.Run()
 
-	workerPool := worker.NewWorkerPool(ctx, cfg, workerChan, database)
+	workerPool := worker.NewWorkerPool(ctx, cfg.Timeout, workerChan, db)
 	go workerPool.Work()
 
 	<-ctx.Done()

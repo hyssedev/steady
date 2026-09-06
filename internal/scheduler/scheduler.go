@@ -6,37 +6,37 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hyssedev/steady/internal/config"
 	"github.com/hyssedev/steady/internal/monitor"
 )
 
 type Scheduler struct {
 	ctx        context.Context
-	cfg        config.Config
-	workerChan chan *monitor.Monitor
+	interval   time.Duration
+	monitors   []monitor.Monitor
+	workerChan chan monitor.Monitor
 }
 
-func NewScheduler(ctx context.Context, cfg config.Config, workerChan chan *monitor.Monitor) Scheduler {
+func NewScheduler(ctx context.Context, interval time.Duration, monitors []monitor.Monitor, workerChan chan monitor.Monitor) Scheduler {
 	return Scheduler{
 		ctx:        ctx,
-		cfg:        cfg,
+		interval:   interval,
+		monitors:   monitors,
 		workerChan: workerChan,
 	}
 }
 
 type scheduledMonitor struct {
-	monitor   *monitor.Monitor
+	monitor   monitor.Monitor
 	nextCheck time.Time
-	lastCheck time.Time
 }
 
 func (s Scheduler) Run() {
-	mh := make(MonitorHeap, len(s.cfg.Monitors))
+	mh := make(MonitorHeap, len(s.monitors))
 
-	for i := range s.cfg.Monitors {
+	for i := range s.monitors {
 		mh[i] = &scheduledMonitor{
-			monitor:   &s.cfg.Monitors[i],
-			nextCheck: time.Now().Add(s.cfg.Interval),
+			monitor:   s.monitors[i],
+			nextCheck: time.Now().Add(s.interval),
 		}
 	}
 
@@ -55,8 +55,7 @@ func (s Scheduler) Run() {
 		case <-timer.C:
 			s.workerChan <- scheduled.monitor
 
-			scheduled.nextCheck = time.Now().Add(s.cfg.Interval)
-			scheduled.lastCheck = time.Now()
+			scheduled.nextCheck = time.Now().Add(s.interval)
 
 			heap.Push(&mh, scheduled)
 		case <-s.ctx.Done():
