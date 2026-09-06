@@ -72,21 +72,22 @@ func (w Worker) work() {
 	for {
 		select {
 		case job := <-w.channel:
+			startedAt := time.Now()
+
 			req, err := http.NewRequestWithContext(w.ctx, http.MethodGet, job.URL.String(), nil)
 			if err != nil {
 				fmt.Printf("Error creating request for job %v\n", job.Name)
 				continue
 			}
 
-			startedAt := time.Now()
-
 			resp, err := w.client.Do(req)
-			latency := time.Since(startedAt)
+
+			latency := time.Since(startedAt).Milliseconds()
 
 			if err != nil {
 				fmt.Printf("Check %v failed, err: %v\n", job.Name, err)
 
-				if err := w.db.SaveCheck(w.ctx, job.ID, false, nil, latency.Milliseconds(), err); err != nil {
+				if err := w.db.SaveCheck(w.ctx, job.ID, false, nil, latency, err); err != nil {
 					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 				}
 				continue
@@ -95,24 +96,11 @@ func (w Worker) work() {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 
-			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
-				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
+			fmt.Printf("Check done on %v\n", job.Name)
 
-				if err := w.db.SaveCheck(
-					w.ctx,
-					job.ID,
-					false,
-					&resp.StatusCode,
-					latency.Milliseconds(),
-					err,
-				); err != nil {
-					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
-				}
-				continue
-			}
+			success := resp.StatusCode >= http.StatusOK || resp.StatusCode < http.StatusBadRequest
 
-			fmt.Printf("Check %v successful\n", job.Name)
-			if err := w.db.SaveCheck(w.ctx, job.ID, true, &resp.StatusCode, latency.Milliseconds(), err); err != nil {
+			if err := w.db.SaveCheck(w.ctx, job.ID, success, &resp.StatusCode, latency, err); err != nil {
 				fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 			}
 		case <-w.ctx.Done():

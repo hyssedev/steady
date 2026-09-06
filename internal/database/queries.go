@@ -21,10 +21,11 @@ const createTablesQuery = `
 		CREATE INDEX IF NOT EXISTS checks_monitor_checked_at
 		ON checks (monitor_id, checked_at);`
 
-const insertMonitorQuery = `
+const syncMonitorQuery = `
 		INSERT INTO monitors (name, url, created_at)
 		VALUES (?, ?, ?)
-		ON CONFLICT(url) DO UPDATE SET name = excluded.name;`
+		ON CONFLICT(url) DO UPDATE SET name = excluded.name
+		RETURNING id;`
 
 const getIdQuery = `
 		SELECT id
