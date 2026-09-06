@@ -16,7 +16,12 @@ type Scheduler struct {
 	workerChan chan monitor.Monitor
 }
 
-func NewScheduler(ctx context.Context, interval time.Duration, monitors []monitor.Monitor, workerChan chan monitor.Monitor) Scheduler {
+func NewScheduler(
+	ctx context.Context,
+	interval time.Duration,
+	monitors []monitor.Monitor,
+	workerChan chan monitor.Monitor,
+) Scheduler {
 	return Scheduler{
 		ctx:        ctx,
 		interval:   interval,
@@ -59,7 +64,6 @@ func (s Scheduler) Run() {
 
 			heap.Push(&mh, scheduled)
 		case <-s.ctx.Done():
-			// TODO: clean-up
 			timer.Stop()
 
 			return

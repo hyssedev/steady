@@ -70,8 +70,13 @@ func TestParse(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "no monitors",
-			data:    strings.Replace(validConfig, "monitors:\n  - name: Main\n    url: https://example.com", "monitors: []", 1),
+			name: "no monitors",
+			data: strings.Replace(
+				validConfig,
+				"monitors:\n  - name: Main\n    url: https://example.com",
+				"monitors: []",
+				1,
+			),
 			wantErr: true,
 		},
 		{

@@ -20,7 +20,12 @@ type WorkerPool struct {
 	client *http.Client
 }
 
-func NewWorkerPool(ctx context.Context, timeout time.Duration, channel chan monitor.Monitor, db database.Database) WorkerPool {
+func NewWorkerPool(
+	ctx context.Context,
+	timeout time.Duration,
+	channel chan monitor.Monitor,
+	db database.Database,
+) WorkerPool {
 	return WorkerPool{
 		ctx:     ctx,
 		channel: channel,
@@ -47,7 +52,13 @@ type Worker struct {
 	db database.Database
 }
 
-func NewWorker(ctx context.Context, id int, client *http.Client, channel chan monitor.Monitor, db database.Database) Worker {
+func NewWorker(
+	ctx context.Context,
+	id int,
+	client *http.Client,
+	channel chan monitor.Monitor,
+	db database.Database,
+) Worker {
 	return Worker{
 		ctx:     ctx,
 		id:      id,
@@ -87,7 +98,14 @@ func (w Worker) work() {
 			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
 				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
 
-				if err := w.db.SaveCheck(w.ctx, job.ID, false, &resp.StatusCode, latency.Milliseconds(), err); err != nil {
+				if err := w.db.SaveCheck(
+					w.ctx,
+					job.ID,
+					false,
+					&resp.StatusCode,
+					latency.Milliseconds(),
+					err,
+				); err != nil {
 					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 				}
 				continue
@@ -98,7 +116,6 @@ func (w Worker) work() {
 				fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 			}
 		case <-w.ctx.Done():
-			// TODO: clean-up
 			return
 		}
 	}
@@ -106,11 +123,6 @@ func (w Worker) work() {
 
 func newClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		// Transport: nil,
-		// CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		// 	panic("TODO")
-		// },
-		// Jar:     nil,
 		Timeout: timeout,
 	}
 }
