@@ -56,13 +56,17 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-
 	defer database.DB.Close()
+
+	cfg.Monitors, err = database.SyncMonitors(ctx, cfg.Monitors)
+	if err != nil {
+		return err
+	}
 
 	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
 	go scheduler.Run()
 
-	workerPool := worker.NewWorkerPool(ctx, cfg, workerChan)
+	workerPool := worker.NewWorkerPool(ctx, cfg, workerChan, database)
 	go workerPool.Work()
 
 	<-ctx.Done()
