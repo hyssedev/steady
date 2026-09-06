@@ -1,12 +1,15 @@
 package config
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyssedev/steady/internal/monitor"
 )
 
 const validConfig = `
@@ -23,7 +26,7 @@ func TestParse(t *testing.T) {
 		Listen:   ":8080",
 		Interval: time.Minute,
 		Timeout:  5 * time.Second,
-		Monitors: []Monitor{{Name: "Main", URL: "https://example.com"}},
+		Monitors: []monitor.Monitor{{Name: "Main", URL: &url.URL{Scheme: "https", Host: "example.com"}}},
 	}
 	tests := []struct {
 		name    string
@@ -106,7 +109,7 @@ func TestReadConfig(t *testing.T) {
 		Listen:   ":8080",
 		Interval: time.Minute,
 		Timeout:  5 * time.Second,
-		Monitors: []Monitor{{Name: "Main", URL: "https://example.com"}},
+		Monitors: []monitor.Monitor{{Name: "Main", URL: &url.URL{Scheme: "https", Host: "example.com"}}},
 	}
 	tests := []struct {
 		name    string
