@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/database"
 	"github.com/hyssedev/steady/internal/monitor"
 	"github.com/hyssedev/steady/internal/scheduler"
 	"github.com/hyssedev/steady/internal/worker"
@@ -50,6 +51,13 @@ func Run() error {
 	defer stop()
 
 	workerChan := make(chan *monitor.Monitor, 1)
+
+	database, err := database.NewDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer database.DB.Close()
 
 	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
 	go scheduler.Run()
