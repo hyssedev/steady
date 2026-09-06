@@ -98,7 +98,7 @@ func (w Worker) work() {
 
 			fmt.Printf("Check done on %v\n", job.Name)
 
-			success := resp.StatusCode >= http.StatusOK || resp.StatusCode < http.StatusBadRequest
+			success := resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusBadRequest
 
 			if err := w.db.SaveCheck(w.ctx, job.ID, success, &resp.StatusCode, latency, err); err != nil {
 				fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)

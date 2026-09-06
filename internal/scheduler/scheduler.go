@@ -58,14 +58,16 @@ func (s Scheduler) Run() {
 
 		select {
 		case <-timer.C:
-			s.workerChan <- scheduled.monitor
+			select {
+			case s.workerChan <- scheduled.monitor:
+				scheduled.nextCheck = time.Now().Add(s.interval)
 
-			scheduled.nextCheck = time.Now().Add(s.interval)
-
-			heap.Push(&mh, scheduled)
+				heap.Push(&mh, scheduled)
+			case <-s.ctx.Done():
+				return
+			}
 		case <-s.ctx.Done():
 			timer.Stop()
-
 			return
 		}
 	}
