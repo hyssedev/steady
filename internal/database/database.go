@@ -34,30 +34,19 @@ func (db Database) SyncMonitors(ctx context.Context, monitors []monitor.Monitor)
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
 
-	for _, m := range monitors {
-		if _, err := tx.ExecContext(
-			ctx,
-			insertMonitorQuery,
-			m.Name,
-			m.URL.String(),
-			time.Now().UTC().Format(time.RFC3339Nano),
-		); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
+	for i := range monitors {
+		if err := tx.QueryRowContext(ctx, syncMonitorQuery, monitors[i].Name, monitors[i].URL.String(), now).
+			Scan(&monitors[i].ID); err != nil {
 			return nil, err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return nil, err
-	}
-
-	for i := range monitors {
-		var id int64
-		if err := db.DB.QueryRowContext(ctx, getIdQuery, monitors[i].URL.String()).Scan(&id); err != nil {
-			return nil, err
-		}
-
-		monitors[i].ID = id
 	}
 
 	return monitors, nil
@@ -68,9 +57,11 @@ func (db Database) SaveCheck(
 	monitorID int64,
 	success bool,
 	statusCode *int,
-	latency_ms int64,
+	latencyMs int64,
 	checkErr error,
 ) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+
 	successInt := 0
 	if success {
 		successInt = 1
@@ -87,9 +78,9 @@ func (db Database) SaveCheck(
 		monitorID,
 		successInt,
 		statusCode,
-		latency_ms,
+		latencyMs,
 		checkError,
-		time.Now().UTC().Format(time.RFC3339Nano),
+		now,
 	); err != nil {
 		return err
 	}
