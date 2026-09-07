@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -56,21 +57,26 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	defer db.DB.Close()
 
 	monitors, err := db.SyncMonitors(ctx, cfg.Monitors)
 	if err != nil {
 		return err
 	}
 
+	var wg sync.WaitGroup
+
 	scheduler := scheduler.NewScheduler(ctx, cfg.Interval, monitors, workerChan)
-	go scheduler.Run()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scheduler.Run()
+	}()
 
 	workerPool := worker.NewWorkerPool(ctx, cfg.Timeout, workerChan, db)
-	go workerPool.Work()
+	workerPool.Work(&wg)
 
 	<-ctx.Done()
-	log.Print("shutting down server ...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -79,9 +85,11 @@ func Run() error {
 		return fmt.Errorf("shut down server: %w", err)
 	}
 
-	log.Print("server shut down")
+	log.Print("shutting down server ...")
 
-	return nil
+	wg.Wait()
+
+	return db.DB.Close()
 }
 
 func main() {

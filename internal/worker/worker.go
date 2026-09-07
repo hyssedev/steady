@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/hyssedev/steady/internal/database"
@@ -35,11 +36,14 @@ func NewWorkerPool(
 	}
 }
 
-func (wp WorkerPool) Work() {
+func (wp WorkerPool) Work(wg *sync.WaitGroup) {
 	for i := 1; i <= 3; i++ {
-		worker := NewWorker(wp.ctx, i, wp.client, wp.channel, wp.db)
+		wg.Add(1)
 
-		go worker.work()
+		go func(id int) {
+			defer wg.Done()
+			NewWorker(wp.ctx, id, wp.client, wp.channel, wp.db).work()
+		}(i)
 	}
 }
 
