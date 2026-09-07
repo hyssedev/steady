@@ -5,36 +5,45 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
+	"time"
 
-	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/database"
 	"github.com/hyssedev/steady/internal/monitor"
 )
 
 type WorkerPool struct {
 	ctx     context.Context
-	cfg     config.Config
-	channel chan *monitor.Monitor
+	timeout time.Duration
+	channel chan monitor.Monitor
+	db      database.Database
 
-	client  *http.Client
-	workers []Worker
+	client *http.Client
 }
 
-func NewWorkerPool(ctx context.Context, cfg config.Config, channel chan *monitor.Monitor) WorkerPool {
+func NewWorkerPool(
+	ctx context.Context,
+	timeout time.Duration,
+	channel chan monitor.Monitor,
+	db database.Database,
+) WorkerPool {
 	return WorkerPool{
 		ctx:     ctx,
-		cfg:     cfg,
 		channel: channel,
+		db:      db,
 
-		client: newClient(cfg),
+		client: newClient(timeout),
 	}
 }
 
-func (wp WorkerPool) Work() {
+func (wp WorkerPool) Work(wg *sync.WaitGroup) {
 	for i := 1; i <= 3; i++ {
-		worker := NewWorker(wp.ctx, i, wp.client, wp.channel)
-		wp.workers = append(wp.workers, worker)
+		wg.Add(1)
 
-		go worker.work()
+		go func(id int) {
+			defer wg.Done()
+			NewWorker(wp.ctx, id, wp.client, wp.channel, wp.db).work()
+		}(i)
 	}
 }
 
@@ -42,15 +51,24 @@ type Worker struct {
 	ctx     context.Context
 	id      int
 	client  *http.Client
-	channel chan *monitor.Monitor
+	channel chan monitor.Monitor
+
+	db database.Database
 }
 
-func NewWorker(ctx context.Context, id int, client *http.Client, channel chan *monitor.Monitor) Worker {
+func NewWorker(
+	ctx context.Context,
+	id int,
+	client *http.Client,
+	channel chan monitor.Monitor,
+	db database.Database,
+) Worker {
 	return Worker{
 		ctx:     ctx,
 		id:      id,
 		client:  client,
 		channel: channel,
+		db:      db,
 	}
 }
 
@@ -58,6 +76,8 @@ func (w Worker) work() {
 	for {
 		select {
 		case job := <-w.channel:
+			startedAt := time.Now()
+
 			req, err := http.NewRequestWithContext(w.ctx, http.MethodGet, job.URL.String(), nil)
 			if err != nil {
 				fmt.Printf("Error creating request for job %v\n", job.Name)
@@ -65,35 +85,36 @@ func (w Worker) work() {
 			}
 
 			resp, err := w.client.Do(req)
+
+			latency := time.Since(startedAt).Milliseconds()
+
 			if err != nil {
 				fmt.Printf("Check %v failed, err: %v\n", job.Name, err)
+
+				if err := w.db.SaveCheck(w.ctx, job.ID, false, nil, latency, err); err != nil {
+					fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
+				}
 				continue
 			}
 
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 
-			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
-				fmt.Printf("Check %v failed, status code: %v\n", job.Name, resp.StatusCode)
-				continue
+			fmt.Printf("Check done on %v\n", job.Name)
+
+			success := resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusBadRequest
+
+			if err := w.db.SaveCheck(w.ctx, job.ID, success, &resp.StatusCode, latency, err); err != nil {
+				fmt.Printf("Save check %v failed, err: %v\n", job.Name, err)
 			}
-
-			fmt.Printf("Check %v successful\n", job.Name)
-
 		case <-w.ctx.Done():
-			// TODO: clean-up
 			return
 		}
 	}
 }
 
-func newClient(cfg config.Config) *http.Client {
+func newClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		// Transport: nil,
-		// CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		// 	panic("TODO")
-		// },
-		// Jar:     nil,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 }

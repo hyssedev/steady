@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/hyssedev/steady/internal/config"
+	"github.com/hyssedev/steady/internal/database"
 	"github.com/hyssedev/steady/internal/monitor"
 	"github.com/hyssedev/steady/internal/scheduler"
 	"github.com/hyssedev/steady/internal/worker"
@@ -49,16 +51,32 @@ func Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	workerChan := make(chan *monitor.Monitor, 1)
+	workerChan := make(chan monitor.Monitor, 1)
 
-	scheduler := scheduler.NewScheduler(ctx, cfg, workerChan)
-	go scheduler.Run()
+	db, err := database.NewDatabase(ctx)
+	if err != nil {
+		return err
+	}
 
-	workerPool := worker.NewWorkerPool(ctx, cfg, workerChan)
-	go workerPool.Work()
+	monitors, err := db.SyncMonitors(ctx, cfg.Monitors)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+
+	scheduler := scheduler.NewScheduler(ctx, cfg.Interval, monitors, workerChan)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scheduler.Run()
+	}()
+
+	workerPool := worker.NewWorkerPool(ctx, cfg.Timeout, workerChan, db)
+	workerPool.Work(&wg)
 
 	<-ctx.Done()
-	log.Print("shutting down server ...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -67,9 +85,11 @@ func Run() error {
 		return fmt.Errorf("shut down server: %w", err)
 	}
 
-	log.Print("server shut down")
+	log.Print("shutting down server ...")
 
-	return nil
+	wg.Wait()
+
+	return db.DB.Close()
 }
 
 func main() {
